@@ -15,14 +15,12 @@ def get_mask_edges_distances(mask, direction_num=16):
     Output: ===> distance_list : []
     """
 
-    # 获取掩码的中心点（图像几何中心）
     h, w = mask.shape[-2:]
     center = (w // 2, h // 2)
 
-    # 检查中心点是否在掩码内，如果不在则使用掩码的质心
     if mask[center[1], center[0]] == 0:
         M = cv2.moments(mask.astype(float))
-        if M["m00"] == 0:  # 掩码为空
+        if M["m00"] == 0:  
             return None
         cX = int(M["m10"] / M["m00"])
         cY = int(M["m01"] / M["m00"])
@@ -32,25 +30,20 @@ def get_mask_edges_distances(mask, direction_num=16):
     angles = np.linspace(0, 2 * np.pi, direction_num, endpoint=False)  # 16个均等方向
 
     for angle in angles:
-        # 计算方向向量
         dx = math.cos(angle)
         dy = math.sin(angle)
 
-        # 从中心点沿方向向量移动，直到到达掩码边缘或图像边界
         distance = 0
         x, y = center
 
         while True:
-            # 沿方向向量移动一小步
             x += dx
             y += dy
             distance += 1
 
-            # 检查是否超出图像边界
             if round(x) < 0 or round(x) >= w or round(y) < 0 or round(y) >= h:
                 break
 
-            # 检查是否到达掩码边缘（从前景到背景）
             if mask[int(round(y)), int(round(x))] == 0:
                 break
 
@@ -58,7 +51,7 @@ def get_mask_edges_distances(mask, direction_num=16):
 
     return {
         "center": center,
-        "angles": angles,  # 弧度
+        "angles": angles,  
         "distances": distances
     }
 
@@ -144,7 +137,7 @@ class SGM(nn.Module):
         positive_sup_fts = (sup_fts * sup_msk[None,...]) #[1 512 256 256]
         c,h,w = positive_sup_fts.shape[-3:]
         positive_sup_fts = positive_sup_fts.reshape(c,-1)
-        shape_sup_fts = self.shape_fts_generator(positive_sup_fts) #[512, 512] 前者是通道数量， 后者形状特征通道数量
+        shape_sup_fts = self.shape_fts_generator(positive_sup_fts) #[512, 512] previous num of channels， latter : num of shape fts
         # =================================================
         shape_proto = self.shape_proto(sup_msk)
         # =================================================
@@ -153,24 +146,3 @@ class SGM(nn.Module):
         sim_score = torch.sum(shape_sup_fts_norm * shape_proto_norm,dim=-1)[:,None] #[512 1]
         sim_score = F.sigmoid(sim_score*self.scalar).permute(1,0) #[1 512]  (0-1)
         return sim_score+0.1
-
-
-
-
-
-
-"""
-
-from PIL import Image
-msk = Image.open("/home/cs4007/code/Unet_seg/imgs/lb.png")
-msk = np.array(msk)
-msk = (msk!=0).astype(int)
-msk = torch.from_numpy(msk).unsqueeze(0)
-
-# fts = torch.randn(1,512,64,64)
-content_proto = torch.randn(1,512)
-shape_embedded_proto = ShapeAdaptor(emb_dim=512,protos_num=1)(content_proto,msk)
-print(shape_embedded_proto.shape)
-print("end")
-"""
-
