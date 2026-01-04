@@ -6,9 +6,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-"""
-写一个图注意力原型提取器
-"""
 class CrossAttention(nn.Module):
     def __init__(self, dim=512):
         super().__init__()
@@ -50,7 +47,6 @@ class GPG(nn.Module):
         for _ in range(self.num_gcn_layers):
             self.gcn_layers.append(nn.Linear(self.feature_dim, self.feature_dim))
 
-        # 修正：AdaptiveAvgPool1d 的参数是输出的长度
         self.adaptive_pooling = nn.AdaptiveAvgPool1d(self.num_nodes)
         self.alpha = nn.Parameter(torch.tensor(-4.0),requires_grad=True)
         self.CA = CrossAttention()
@@ -58,38 +54,28 @@ class GPG(nn.Module):
     def forward(self, fts, msk):
         """
         fts: [1, 512, 256, 256]
-        msk: [1, 256, 256] (应为单通道掩码)
+        msk: [1, 256, 256] 
         """
         fts = F.interpolate(fts, size=msk.shape[-2:], mode='bilinear', align_corners=True)
 
-        # 1. 计算传统原型 (作为图的全局节点)
-        # 确保 msk 是 [1, 1, H, W] 以便广播
         msk_expanded = msk.unsqueeze(1) # [1, 1, 256, 256]
         glob_proto = torch.sum(fts * msk_expanded, dim=(-2, -1)) / (torch.sum(msk) + 1e-8) # Shape: [1, 512]
 
-        # 2. 提取所有前景特征作为局部节点池
-        # 修正: msk应为bool或float类型, 并且只有1个通道
         fg_fts_pixels = fts.masked_select(msk_expanded.bool()).view(1, self.feature_dim, -1) # Shape: [1, 512, N]
-
-        # 如果没有前景像素，直接返回全局原型
+    
         if fg_fts_pixels.shape[-1] == 0:
             return glob_proto # 返回 [1 512]
 
-        # 3. 从局部节点池中采样得到固定数量的局部节点
-        # 修正：正确使用 AdaptiveAvgPool1d
         local_protos = self.adaptive_pooling(fg_fts_pixels) # Shape: [1, 512, num_nodes]
         local_protos = local_protos.permute(0, 2, 1).squeeze(0) # Shape: [num_nodes, 512]
 
-        # 4. 组合成图的所有节点
-        # 修正: glob_proto也需要调整形状
         proto = torch.cat((glob_proto, local_protos), dim=0) # Shape: [num_nodes + 1, 512]
 
 
 
         H = proto # Initial node features
-        # 动态邻接矩阵
+
         for gcn_layer in self.gcn_layers:
-            # 5. 构建图并执行GCN
             proto_norm = F.normalize(H, dim=1)
             adj = torch.matmul(proto_norm, proto_norm.t())  # Adjacency matrix
             adj = F.softmax(F.relu(adj), dim=1)  # Normalize edges
@@ -97,15 +83,10 @@ class GPG(nn.Module):
             aggregated_features = torch.matmul(adj, H)
             H = H + F.relu(gcn_layer(aggregated_features))
 
-        # 6. 聚合GCN输出得到最终原型
-        # 【【【核心修正】】】: 对GCN的输出 H 求平均
-        #  注意力引导节点聚合
-        q_node = H[:1] # 全局节点
+        q_node = H[:1]
         k_nodes = H[1:]
 
         final_proto = self.CA(q_node, k_nodes)
-
-
         weight = F.sigmoid(self.alpha)
         # print(weight)
         # print(f"GPG weight: {weight}")
