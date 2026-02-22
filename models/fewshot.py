@@ -101,9 +101,9 @@ class FewShot(nn.Module):
         if mode == "train":
             align_loss += self.align_loss(sup_fts_bak,qry_fts_bak,sup_msk,qry_pred_logit,shape_scores)
             pred_loss += self.loss.pred_loss(qry_pred_logit,qry_msk)
-            # if torch.argmax(qry_pred_logit,dim=1).sum() > 1000:
-            #     bd_shape_loss += 0.005 * self.loss.bd_shape_loss(qry_pred,sup_msk[None,...])
-            #     consistency_loss += self.loss.pair_wise_consistency_loss(qry_pred_logit, qry_msk)
+            if torch.argmax(qry_pred_logit,dim=1).sum() > 1000:
+                bd_shape_loss += 0.005 * self.loss.bd_shape_loss(qry_pred,sup_msk[None,...])
+                consistency_loss += self.loss.pair_wise_consistency_loss(qry_pred_logit, qry_msk)
             # kl_shape_loss += self.loss.kl_shape_loss(qry_pred,sup_msk)
             return qry_pred_logit, pred_loss,align_loss+coarse_loss+consistency_loss, bd_shape_loss
         else:
