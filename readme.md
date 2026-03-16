@@ -109,7 +109,7 @@ Taking CT->MR as an example:
 Training：
 
 ```Bash
-./scripts/train_on_ABDOMEN_CT.sh # Ensure the file has execution permission
+./scripts/train_on_ABDOMEN_CT.sh # Ensure the file has execution permission.
 ```
 
 Inference：
